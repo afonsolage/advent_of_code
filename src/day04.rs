@@ -23,7 +23,7 @@ fn count_matching_cards(content: &str) -> u32 {
 }
 
 fn part02(input: &str) -> u32 {
-    let mut card_map = input
+    let mut cards = input
         .lines()
         .map(|line| {
             let (card, content) = line.split_once(':').unwrap();
@@ -39,23 +39,31 @@ fn part02(input: &str) -> u32 {
         })
         .collect::<Vec<_>>();
 
-    card_map.sort_by(|(card_a, _), (card_b, _)| card_a.cmp(card_b));
+    cards.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-    let max = *card_map.iter().map(|(card, _)| card).max().unwrap();
+    let card_copies = cards
+        .iter()
+        .map(|(c, _)| (*c, 1u32))
+        .collect::<HashMap<_, _>>();
 
-    let map = card_map
+    let max = *cards.iter().map(|(card, _)| card).max().unwrap();
+
+    cards
         .into_iter()
-        .fold(HashMap::<u32, u32>::new(), |mut acc, (card, count)| {
-            let end_card = (card + count).min(max);
-            for c in card..=end_card {
-                *acc.entry(c).or_default() += 1;
-            }
-            acc
-        });
+        .fold(
+            (card_copies, 0),
+            |(mut card_copies, card_count), (card, winning)| {
+                let copies = card_copies.remove(&card).unwrap();
+                let end_card = (card + winning).min(max);
 
-    println!("Map: {:?}", map);
+                for next_card in (card + 1)..=end_card {
+                    *card_copies.get_mut(&next_card).unwrap() += copies;
+                }
 
-    map.values().sum()
+                (card_copies, card_count + copies)
+            },
+        )
+        .1
 }
 
 fn part01(input: &str) -> u32 {
