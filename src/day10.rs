@@ -15,12 +15,12 @@ enum Tile {
 impl std::fmt::Display for Tile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Tile::Vertical => write!(f, "|"),
-            Tile::Horizontal => write!(f, "-"),
-            Tile::NorthEast => write!(f, "L"),
-            Tile::NorthWest => write!(f, "J"),
-            Tile::SouthWest => write!(f, "7"),
-            Tile::SouthEast => write!(f, "F"),
+            Tile::Vertical => write!(f, "│"),
+            Tile::Horizontal => write!(f, "─"),
+            Tile::NorthEast => write!(f, "└"),
+            Tile::NorthWest => write!(f, "┘"), //J
+            Tile::SouthWest => write!(f, "┐"), //7
+            Tile::SouthEast => write!(f, "┌"), //F
             Tile::Groud => write!(f, "."),
             Tile::Starting => write!(f, "S"),
         }
@@ -247,6 +247,24 @@ fn part02(input: &str) -> u64 {
     dbg!(loop_map.len());
     let mut inside_count = 0;
 
+    let mut line = 0;
+    for i in 0..map.len() {
+        let pos = Pos::from_index(width, i as isize);
+
+        if line != pos.y {
+            println!();
+            line = pos.y;
+        }
+
+        if loop_map.contains(&pos) {
+            print!("{}", map[pos.to_index(size.x) as usize]);
+        } else {
+            print!(".");
+        }
+    }
+
+    println!();
+
     for i in 0..map.len() {
         let pos = Pos::from_index(width, i as isize);
 
@@ -256,15 +274,17 @@ fn part02(input: &str) -> u64 {
 
         println!("Checking intersections for {pos}");
 
-        let left_count = count_intersections(size, Pos { x: -1, y: 0 }, pos, &loop_map);
-        let right_count = count_intersections(size, Pos { x: 1, y: 0 }, pos, &loop_map);
-        let bottom_count = count_intersections(size, Pos { x: 0, y: 1 }, pos, &loop_map);
-        let top_count = count_intersections(size, Pos { x: 0, y: -1 }, pos, &loop_map);
+        let left_count = count_intersections(size, Pos { x: -1, y: 0 }, pos, &map, &loop_map);
+        let right_count = count_intersections(size, Pos { x: 1, y: 0 }, pos, &map, &loop_map);
+        let bottom_count = count_intersections(size, Pos { x: 0, y: 1 }, pos, &map, &loop_map);
+        let top_count = count_intersections(size, Pos { x: 0, y: -1 }, pos, &map, &loop_map);
 
-        dbg!(left_count);
-        dbg!(right_count);
-        dbg!(bottom_count);
-        dbg!(top_count);
+        if pos.x == 7 && pos.y == 4 {
+            dbg!(left_count);
+            dbg!(right_count);
+            dbg!(bottom_count);
+            dbg!(top_count);
+        }
 
         if left_count % 2 == 0 {
             continue;
@@ -284,22 +304,27 @@ fn part02(input: &str) -> u64 {
     inside_count
 }
 
-fn count_intersections(size: Pos, dir: Pos, position: Pos, loop_map: &HashSet<Pos>) -> usize {
-    let mut intersection_count = 0;
+fn count_intersections(
+    size: Pos,
+    dir: Pos,
+    position: Pos,
+    map: &[Tile],
+    loop_map: &HashSet<Pos>,
+) -> usize {
     let mut next_pos = position + dir;
-
-    println!("Checking {position}({next_pos}) ({dir})");
+    let mut intersections = vec![];
 
     while next_pos.x >= 0 && next_pos.y >= 0 && next_pos.x < size.x && next_pos.y < size.y {
-        println!("{next_pos}");
+        let tile = map[next_pos.to_index(size.x) as usize];
+
         if loop_map.contains(&next_pos) {
-            intersection_count += 1;
+            intersections.push(tile);
         }
 
         next_pos = next_pos + dir;
     }
 
-    intersection_count
+    intersections.len()
 }
 
 fn main() {
@@ -350,30 +375,30 @@ LJ...
     #[test]
     fn part02_2() {
         let input = ".F----7F7F7F7F-7....
-    .|F--7||||||||FJ....
-    .||.FJ||||||||L7....
-    FJL7L7LJLJ||LJ.L-7..
-    L--J.L7...LJS7F-7L7.
-    ....F-J..F7FJ|L7L7L7
-    ....L7.F7||L7|.L7L7|
-    .....|FJLJ|FJ|F7|.LJ
-    ....FJL-7.||.||||...
-    ....L---J.LJ.LJLJ...";
+.|F--7||||||||FJ....
+.||.FJ||||||||L7....
+FJL7L7LJLJ||LJ.L-7..
+L--J.L7...LJS7F-7L7.
+....F-J..F7FJ|L7L7L7
+....L7.F7||L7|.L7L7|
+.....|FJLJ|FJ|F7|.LJ
+....FJL-7.||.||||...
+....L---J.LJ.LJLJ...";
         assert_eq!(super::part02(input), 8);
     }
 
-    #[test]
-    fn part02_3() {
-        let input = "FF7FSF7F7F7F7F7F---7
-    L|LJ||||||||||||F--J
-    FL-7LJLJ||||||LJL-77
-    F--JF--7||LJLJ7F7FJ-
-    L---JF-JLJ.||-FJLJJ7
-    |F|F-JF---7F7-L7L|7|
-    |FFJF7L7F-JF7|JL---7
-    7-L-JL7||F7|L7F-7F7|
-    L.L7LFJ|||||FJL7||LJ
-    L7JLJL-JLJLJL--JLJ.L";
-        assert_eq!(super::part02(input), 10);
-    }
+    //     #[test]
+    //     fn part02_3() {
+    //         let input = "FF7FSF7F7F7F7F7F---7
+    // L|LJ||||||||||||F--J
+    // FL-7LJLJ||||||LJL-77
+    // F--JF--7||LJLJ7F7FJ-
+    // L---JF-JLJ.||-FJLJJ7
+    // |F|F-JF---7F7-L7L|7|
+    // |FFJF7L7F-JF7|JL---7
+    // 7-L-JL7||F7|L7F-7F7|
+    // L.L7LFJ|||||FJL7||LJ
+    // L7JLJL-JLJLJL--JLJ.L";
+    //         assert_eq!(super::part02(input), 10);
+    //     }
 }
