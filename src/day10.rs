@@ -43,7 +43,7 @@ impl Pos {
         }
     }
 
-    fn to_index(&self, width: isize) -> isize {
+    fn to_index(self, width: isize) -> isize {
         self.y * width + self.x
     }
 
@@ -145,7 +145,7 @@ fn part01(input: &str) -> u64 {
     }
 }
 
-fn calc_starting_connections(map: &Vec<Tile>, width: isize, start_pos: Pos) -> (Pos, Pos) {
+fn calc_starting_connections(map: &[Tile], width: isize, start_pos: Pos) -> (Pos, Pos) {
     let top = Pos { x: 0, y: -1 } + start_pos;
     let right = Pos { x: 1, y: 0 } + start_pos;
     let bottom = Pos { x: 0, y: 1 } + start_pos;
@@ -234,9 +234,6 @@ fn part02(input: &str) -> u64 {
     }
 
     let vecs = loop_list.iter().map(|p| p.as_vec2()).collect::<Vec<_>>();
-    let len = vecs.len();
-
-    println!("Vecs: {len}");
 
     let mut inside_count = 0;
     let mut inside = HashSet::new();
@@ -272,28 +269,6 @@ fn part02(input: &str) -> u64 {
         inside.insert(pos);
     }
 
-    let mut line = 0;
-    for i in 0..map.len() {
-        let pos = Pos::from_index(width, i as isize);
-
-        if line != pos.y {
-            println!();
-            line = pos.y;
-        }
-
-        if loop_list.contains(&pos) {
-            print!("{}", map[pos.to_index(width) as usize]);
-        } else {
-            if inside.contains(&pos) {
-                print!("I");
-            } else {
-                print!(".");
-            }
-        }
-    }
-
-    println!();
-
     inside_count
 }
 
@@ -323,7 +298,7 @@ fn check_intersection(origin: Vec2, dir: Vec2, point_a: Vec2, point_b: Vec2) -> 
     let t1 = v2.perp_dot(v1) / dot;
     let t2 = v1.dot(v3) / dot;
 
-    t1 >= 0.0 && t2 >= 0.0 && t2 <= 1.0
+    t1 >= 0.0 && (0.0..=1.0).contains(&t2)
 }
 
 fn main() {
@@ -430,3 +405,4 @@ L7JLJL-JLJLJL--JLJ.L";
         assert_eq!(super::part02(input), 10);
     }
 }
+
