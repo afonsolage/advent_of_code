@@ -1,8 +1,37 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum State {
     Functional(Option<Box<State>>),
     Damaged(Option<Box<State>>),
     Unknown(Option<Box<State>>),
+}
+
+impl State {
+    fn traverse(&self, mut parent: String, output: &mut Vec<String>) {
+        match self {
+            State::Functional(n) => {
+                parent.push('.');
+                if let Some(next) = n {
+                    next.traverse(parent, output);
+                } else {
+                    output.push(parent);
+                }
+            }
+            State::Damaged(n) => {
+                parent.push('#');
+                if let Some(next) = n {
+                    next.traverse(parent, output);
+                } else {
+                    output.push(parent);
+                }
+            }
+            State::Unknown(n) => {
+                let f = State::Functional(n.clone());
+                let d = State::Damaged(n.clone());
+                f.traverse(parent.clone(), output);
+                d.traverse(parent, output);
+            }
+        }
+    }
 }
 
 impl From<char> for State {
@@ -62,23 +91,42 @@ fn parse(line: &[char]) -> Option<Box<State>> {
     Some(state)
 }
 
+fn is_record_valid(record: &str, registry: &[usize]) -> bool {
+    let splitted = record
+        .split('.')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>();
+
+    splitted.len() == registry.len()
+        && splitted
+            .into_iter()
+            .zip(registry)
+            .all(|(rec, &reg)| rec.len() == reg)
+}
+
 fn part01(input: &str) -> u64 {
-    let lines = input
+    input
         .lines()
         .map(|line| {
             let (registry, records) = line.split_once(|c: char| c.is_ascii_whitespace()).unwrap();
-            (parse(&registry.chars().collect::<Vec<_>>()), records)
+
+            let mut parsed_registries = vec![];
+            let state = parse(&registry.chars().collect::<Vec<_>>());
+            state
+                .unwrap()
+                .traverse(String::new(), &mut parsed_registries);
+
+            let records = records
+                .split(',')
+                .map(|r| r.parse::<usize>().unwrap())
+                .collect::<Vec<_>>();
+
+            parsed_registries
+                .into_iter()
+                .filter(|reg| is_record_valid(reg, &records))
+                .count() as u64
         })
-        .collect::<Vec<_>>();
-
-    for line in lines {
-        if let (Some(state), records) = line {
-            println!("{state} {records:?}");
-            println!();
-        }
-    }
-
-    0
+        .sum()
 }
 
 fn part02(_input: &str) -> u64 {
