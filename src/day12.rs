@@ -1,42 +1,126 @@
-fn traverse(
-    registry: &mut [char],
-    pos: usize,
-    valid_registries: &mut Vec<Vec<char>>,
-    records: &[usize],
-) {
-    if let Some(&c) = registry.get(pos) {
-        match c {
-            '.' | '#' => traverse(registry, pos + 1, valid_registries, records),
-            '?' => {
-                let mut f_registry = registry.to_vec();
-                f_registry[pos] = '.';
-                // if is_partial_registry_valid(&f_parent, records) {
-                traverse(&mut f_registry, pos + 1, valid_registries, records);
-                // }
+use std::collections::HashSet;
 
-                let d_registry = registry;
-                d_registry[pos] = '#';
-                // if is_partial_registry_valid(&d_parent, records) {
-                traverse(d_registry, pos + 1, valid_registries, records);
-                // }
-            }
-            _ => unreachable!(),
-        }
-    } else if is_registry_valid(registry, records) {
-        valid_registries.push(registry.to_vec());
+#[derive(Default, Debug, Clone)]
+struct Node {
+    registry: Vec<char>,
+    pos: usize,
+}
+
+impl Node {
+    fn get(&self) -> Option<&char> {
+        self.registry.get(self.pos)
+    }
+
+    fn set(&mut self, val: char) {
+        self.registry[self.pos] = val;
+    }
+
+    fn next(&mut self) {
+        self.pos += 1;
     }
 }
 
-// fn is_partial_registry_valid(registry: &str, record: &[usize]) -> bool {
-//     println!("Is partial registry valid: {registry}");
-//     let (partial_record, _) = registry.split_once('?').unwrap();
-//
-//     partial_record
-//         .split('.')
-//         .filter(|s| !s.is_empty())
-//         .zip(record)
-//         .all(|(rec, &reg)| rec.len() <= reg)
-// }
+impl std::fmt::Display for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({}){}",
+            self.pos,
+            String::from_iter(self.registry.iter())
+        )
+    }
+}
+
+fn traverse(registry: Vec<char>, records: &[usize]) -> usize {
+    let mut count = 0;
+    let mut stack = vec![Node { registry, pos: 0 }];
+    let mut add_node: Option<Node> = None;
+
+    // let mut log_count = 0;
+
+    let mut set = HashSet::new();
+
+    while !stack.is_empty() {
+        if let Some(add_node) = add_node.take() {
+            let str = String::from_iter(add_node.registry.iter());
+            if !set.contains(&str) {
+                set.insert(str);
+            } else {
+                println!("Duplicated! {str}");
+            }
+            stack.push(add_node);
+        }
+        // let len = stack.len();
+        let node = stack.last_mut().unwrap();
+
+        if let Some(&c) = node.get() {
+            match c {
+                '.' | '#' => node.next(),
+                '?' => {
+                    node.set('.');
+                    let is_maybe_operational = is_partial_registry_valid(&node.registry, records);
+                    node.set('#');
+                    let is_maybe_damaged = is_partial_registry_valid(&node.registry, records);
+
+                    if !is_maybe_operational && !is_maybe_damaged {
+                        stack.pop();
+                    } else if !is_maybe_operational {
+                        node.set('#');
+                    } else if !is_maybe_damaged {
+                        node.set('.');
+                    } else {
+                        // println!("({len})Can be both {node}");
+                        // log_count += 1;
+                        // if log_count > 500 {
+                        // return 0;
+                        // }
+                        let mut functional_node = node.clone();
+                        functional_node.set('.');
+                        add_node = Some(functional_node);
+
+                        node.set('#');
+                    }
+                }
+                _ => unreachable!(),
+            }
+        } else {
+            if is_registry_valid(&node.registry, records) {
+                count += 1;
+            }
+            stack.pop();
+        }
+    }
+
+    count
+}
+
+fn is_partial_registry_valid(registry: &[char], record: &[usize]) -> bool {
+    if let Some(index) = registry.iter().position(|&c| c == '?') {
+        let (partial_record, _) = registry.split_at(index);
+        let last_char = partial_record.iter().last().copied();
+
+        let mut it = partial_record
+            .split(|&c| c == '.')
+            .filter(|s| !s.is_empty())
+            .zip(record)
+            .peekable();
+
+        let tmp = partial_record.iter().collect::<String>();
+        // println!("Checking {tmp} [{record:?}]");
+
+        while let Some((reg, &rec)) = it.next() {
+            if it.peek().is_none() {
+                if Some('#') == last_char && reg.len() > rec {
+                    return false;
+                }
+            } else if reg.len() != rec {
+                return false;
+            }
+        }
+    }
+
+    true
+}
 
 fn is_registry_valid(registry: &[char], record: &[usize]) -> bool {
     let count = registry
@@ -53,9 +137,11 @@ fn is_registry_valid(registry: &[char], record: &[usize]) -> bool {
 }
 
 fn part01(input: &str) -> u64 {
+    let count = input.lines().count();
     input
         .lines()
-        .map(|line| {
+        .enumerate()
+        .map(|(i, line)| {
             let (registry, records) = line.split_once(|c: char| c.is_ascii_whitespace()).unwrap();
 
             let records = records
@@ -63,15 +149,9 @@ fn part01(input: &str) -> u64 {
                 .map(|r| r.parse::<usize>().unwrap())
                 .collect::<Vec<_>>();
 
-            let mut parsed_registries = vec![];
-            println!("Traversing: {registry}");
-            let mut registry = registry.chars().collect::<Vec<_>>();
-            traverse(&mut registry, 0, &mut parsed_registries, &records);
-
-            parsed_registries
-                .into_iter()
-                .filter(|reg| is_registry_valid(reg, &records))
-                .count() as u64
+            println!("Traversing: {registry} ({i}/{count})");
+            let registry = registry.chars().collect::<Vec<_>>();
+            traverse(registry, &records) as u64
         })
         .sum()
 }
@@ -115,6 +195,7 @@ fn main() {
 
 #[cfg(test)]
 mod test {
+    // const INPUT_SINGLE: &str = "?#?#?#?#?#?#?#? 1,3,1,6";
     const INPUT: &str = "???.### 1,1,3
 .??..??...?##. 1,1,3
 ?#?#?#?#?#?#?#? 1,3,1,6
