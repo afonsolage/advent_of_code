@@ -129,8 +129,35 @@ fn part01(input: &str) -> u64 {
         .sum()
 }
 
-fn part02(_input: &str) -> u64 {
-    0
+fn expand_line(input: &str) -> String {
+    let (rec, reg) = input.split_once(|c: char| c.is_ascii_whitespace()).unwrap();
+
+    let (expanded_rec, expanded_reg) = (0..5).fold(
+        (String::new(), String::new()),
+        |(mut acc_rec, mut acc_reg), n| {
+            acc_rec.push_str(rec);
+            acc_reg.push_str(reg);
+            if n != 4 {
+                acc_rec.push('?');
+                acc_reg.push(',');
+            }
+            (acc_rec, acc_reg)
+        },
+    );
+
+    format!("{expanded_rec} {expanded_reg}")
+}
+
+fn part02(input: &str) -> u64 {
+    let expanded = input
+        .lines()
+        .map(expand_line)
+        .fold(String::new(), |mut acc, line| {
+            acc.push('\n');
+            acc.push_str(&line);
+            acc
+        });
+    part01(expanded.trim())
 }
 
 fn main() {
@@ -141,24 +168,21 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-
-    #[test]
-    fn part01() {
-        let input = "???.### 1,1,3
+    const INPUT: &str = "???.### 1,1,3
 .??..??...?##. 1,1,3
 ?#?#?#?#?#?#?#? 1,3,1,6
 ????.#...#... 4,1,1
 ????.######..#####. 1,6,5
 ?###???????? 3,2,1";
 
-        assert_eq!(super::part01(input), 21);
+    #[test]
+    fn part01() {
+        assert_eq!(super::part01(INPUT), 21);
     }
 
     #[test]
     fn part02() {
-        let input = "";
-
-        assert_eq!(super::part02(input), 0);
+        assert_eq!(super::part02(INPUT), 525152);
     }
 }
 
