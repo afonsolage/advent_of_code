@@ -1,106 +1,54 @@
-#[derive(Debug, Clone)]
-enum State {
-    Functional(Option<Box<State>>),
-    Damaged(Option<Box<State>>),
-    Unknown(Option<Box<State>>),
-}
+fn traverse(
+    registry: &mut [char],
+    pos: usize,
+    valid_registries: &mut Vec<Vec<char>>,
+    records: &[usize],
+) {
+    if let Some(&c) = registry.get(pos) {
+        match c {
+            '.' | '#' => traverse(registry, pos + 1, valid_registries, records),
+            '?' => {
+                let mut f_registry = registry.to_vec();
+                f_registry[pos] = '.';
+                // if is_partial_registry_valid(&f_parent, records) {
+                traverse(&mut f_registry, pos + 1, valid_registries, records);
+                // }
 
-impl State {
-    fn traverse(&self, mut parent: String, output: &mut Vec<String>) {
-        match self {
-            State::Functional(n) => {
-                parent.push('.');
-                if let Some(next) = n {
-                    next.traverse(parent, output);
-                } else {
-                    output.push(parent);
-                }
+                let d_registry = registry;
+                d_registry[pos] = '#';
+                // if is_partial_registry_valid(&d_parent, records) {
+                traverse(d_registry, pos + 1, valid_registries, records);
+                // }
             }
-            State::Damaged(n) => {
-                parent.push('#');
-                if let Some(next) = n {
-                    next.traverse(parent, output);
-                } else {
-                    output.push(parent);
-                }
-            }
-            State::Unknown(n) => {
-                let f = State::Functional(n.clone());
-                let d = State::Damaged(n.clone());
-                f.traverse(parent.clone(), output);
-                d.traverse(parent, output);
-            }
-        }
-    }
-}
-
-impl From<char> for State {
-    fn from(value: char) -> Self {
-        match value {
-            '.' => State::Functional(None),
-            '#' => State::Damaged(None),
-            '?' => State::Unknown(None),
             _ => unreachable!(),
         }
+    } else if is_registry_valid(registry, records) {
+        valid_registries.push(registry.to_vec());
     }
 }
 
-impl std::fmt::Display for State {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let next = match self {
-            State::Functional(n) => {
-                write!(f, ".")?;
-                n
-            }
-            State::Damaged(n) => {
-                write!(f, "#")?;
-                n
-            }
-            State::Unknown(n) => {
-                write!(f, "?")?;
-                n
-            }
-        };
-        if let Some(next) = next {
-            write!(f, "{next}")
-        } else {
-            Ok(())
-        }
-    }
-}
+// fn is_partial_registry_valid(registry: &str, record: &[usize]) -> bool {
+//     println!("Is partial registry valid: {registry}");
+//     let (partial_record, _) = registry.split_once('?').unwrap();
+//
+//     partial_record
+//         .split('.')
+//         .filter(|s| !s.is_empty())
+//         .zip(record)
+//         .all(|(rec, &reg)| rec.len() <= reg)
+// }
 
-fn parse(line: &[char]) -> Option<Box<State>> {
-    if line.is_empty() {
-        return None;
-    }
-
-    let mut state: Box<State> = Box::new(line[0].into());
-
-    let next = if line.len() > 1 {
-        parse(&line[1..])
-    } else {
-        None
-    };
-
-    match state.as_mut() {
-        State::Functional(ref mut n) | State::Damaged(ref mut n) | State::Unknown(ref mut n) => {
-            *n = next
-        }
-    }
-
-    Some(state)
-}
-
-fn is_record_valid(record: &str, registry: &[usize]) -> bool {
-    let splitted = record
-        .split('.')
+fn is_registry_valid(registry: &[char], record: &[usize]) -> bool {
+    let count = registry
+        .split(|&c| c == '.')
         .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
+        .count();
 
-    splitted.len() == registry.len()
-        && splitted
-            .into_iter()
-            .zip(registry)
+    count == record.len()
+        && registry
+            .split(|&c| c == '.')
+            .filter(|s| !s.is_empty())
+            .zip(record)
             .all(|(rec, &reg)| rec.len() == reg)
 }
 
@@ -110,42 +58,41 @@ fn part01(input: &str) -> u64 {
         .map(|line| {
             let (registry, records) = line.split_once(|c: char| c.is_ascii_whitespace()).unwrap();
 
-            let mut parsed_registries = vec![];
-            let state = parse(&registry.chars().collect::<Vec<_>>());
-            state
-                .unwrap()
-                .traverse(String::new(), &mut parsed_registries);
-
             let records = records
                 .split(',')
                 .map(|r| r.parse::<usize>().unwrap())
                 .collect::<Vec<_>>();
 
+            let mut parsed_registries = vec![];
+            println!("Traversing: {registry}");
+            let mut registry = registry.chars().collect::<Vec<_>>();
+            traverse(&mut registry, 0, &mut parsed_registries, &records);
+
             parsed_registries
                 .into_iter()
-                .filter(|reg| is_record_valid(reg, &records))
+                .filter(|reg| is_registry_valid(reg, &records))
                 .count() as u64
         })
         .sum()
 }
 
 fn expand_line(input: &str) -> String {
-    let (rec, reg) = input.split_once(|c: char| c.is_ascii_whitespace()).unwrap();
+    let (reg, rec) = input.split_once(|c: char| c.is_ascii_whitespace()).unwrap();
 
-    let (expanded_rec, expanded_reg) = (0..5).fold(
+    let (expanded_reg, expanded_rec) = (0..5).fold(
         (String::new(), String::new()),
-        |(mut acc_rec, mut acc_reg), n| {
-            acc_rec.push_str(rec);
+        |(mut acc_reg, mut acc_rec), n| {
             acc_reg.push_str(reg);
+            acc_rec.push_str(rec);
             if n != 4 {
-                acc_rec.push('?');
-                acc_reg.push(',');
+                acc_reg.push('?');
+                acc_rec.push(',');
             }
-            (acc_rec, acc_reg)
+            (acc_reg, acc_rec)
         },
     );
 
-    format!("{expanded_rec} {expanded_reg}")
+    format!("{expanded_reg} {expanded_rec}")
 }
 
 fn part02(input: &str) -> u64 {
