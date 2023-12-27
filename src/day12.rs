@@ -1,4 +1,9 @@
-#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
+
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, PartialOrd, Ord)]
 enum Spring {
     Operational,
     Damaged,
@@ -39,7 +44,20 @@ impl std::fmt::Display for Spring {
     }
 }
 
-fn reduce(registry: &mut [Spring], records: &[usize]) -> (usize, u64) {
+fn hash(registry: &[Spring], records: &[usize]) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+
+    registry.hash(&mut hasher);
+    records.hash(&mut hasher);
+
+    hasher.finish()
+}
+
+fn reduce(
+    cache: &mut HashMap<u64, (usize, u64)>,
+    registry: &mut [Spring],
+    records: &[usize],
+) -> (usize, u64) {
     if records.len() == 1 {
         // Can't be reduced even further.
         let is_damaged_remaining = registry.iter().any(|c| c.is_damaged());
@@ -52,15 +70,19 @@ fn reduce(registry: &mut [Spring], records: &[usize]) -> (usize, u64) {
         }
     } else if registry.first() == Some(&Spring::Unknown) {
         registry[0] = Spring::Operational;
-        let res = count_arrangements(registry, &records[1..]);
+        let res = count_arrangements(cache, registry, &records[1..]);
         registry[0] = Spring::Unknown;
         res
     } else {
-        count_arrangements(registry, &records[1..])
+        count_arrangements(cache, registry, &records[1..])
     }
 }
 
-fn count_arrangements(registry: &mut [Spring], records: &[usize]) -> (usize, u64) {
+fn count_arrangements(
+    cache: &mut HashMap<u64, (usize, u64)>,
+    registry: &mut [Spring],
+    records: &[usize],
+) -> (usize, u64) {
     // print!("Count: ");
     // registry.iter().for_each(|s| print!("{}", s));
     // records.iter().for_each(|r| print!(" {}", r));
@@ -68,6 +90,11 @@ fn count_arrangements(registry: &mut [Spring], records: &[usize]) -> (usize, u64
 
     if registry.is_empty() || records.is_empty() {
         return (0, 0);
+    }
+
+    let hash = hash(registry, records);
+    if cache.contains_key(&hash) {
+        return *cache.get(&hash).unwrap();
     }
 
     let record = *records.first().unwrap();
@@ -85,14 +112,18 @@ fn count_arrangements(registry: &mut [Spring], records: &[usize]) -> (usize, u64
     if damaged_count > record {
         // If there are more damaged springs than our recorded count
         // this means this registry is invalid.
+        cache.insert(hash, (0, 0));
         return (0, 0);
     }
 
     let next_pos = skip_operational + damaged_count;
 
     if damaged_count == record {
-        let (reduced_pos, reduced_arrangements) = reduce(&mut registry[next_pos..], records);
-        return (next_pos + reduced_pos, reduced_arrangements);
+        let (reduced_pos, reduced_arrangements) = reduce(cache, &mut registry[next_pos..], records);
+
+        let res = (next_pos + reduced_pos, reduced_arrangements);
+        cache.insert(hash, res);
+        return res;
     }
 
     // At this point, the following is true:
@@ -101,11 +132,13 @@ fn count_arrangements(registry: &mut [Spring], records: &[usize]) -> (usize, u64
 
     let Some(next_spring) = registry.get(next_pos) else {
         // End of registry reached, registry is invalid
+        cache.insert(hash, (0, 0));
         return (0, 0);
     };
 
     if next_spring.is_operational() {
         // Damaged count doesn't match record. Invalid registry
+        cache.insert(hash, (0, 0));
         return (0, 0);
     }
 
@@ -116,21 +149,22 @@ fn count_arrangements(registry: &mut [Spring], records: &[usize]) -> (usize, u64
         // There is at least one damaged spring.
         // This spring must be a damaged one.
         registry[next_pos] = Spring::Damaged;
-        let res = count_arrangements(registry, records);
+        let res = count_arrangements(cache, registry, records);
         registry[next_pos] = Spring::Unknown;
+        cache.insert(hash, res);
         return res;
     }
 
     // At this point unknown can be either Operational or Damaged
     registry[next_pos] = Spring::Operational;
-    let (op_pos, op_arrangements) = count_arrangements(registry, records);
+    let (op_pos, op_arrangements) = count_arrangements(cache, registry, records);
     registry[next_pos] = Spring::Damaged;
-    let (dmg_pos, dmg_arrangements) = count_arrangements(registry, records);
+    let (dmg_pos, dmg_arrangements) = count_arrangements(cache, registry, records);
 
     // Restore unknown value
     registry[next_pos] = Spring::Unknown;
 
-    if op_arrangements > 0 && dmg_arrangements > 0 {
+    let res = if op_arrangements > 0 && dmg_arrangements > 0 {
         (op_pos.min(dmg_pos), op_arrangements + dmg_arrangements)
     } else if op_arrangements > 0 {
         (op_pos, op_arrangements)
@@ -138,25 +172,26 @@ fn count_arrangements(registry: &mut [Spring], records: &[usize]) -> (usize, u64
         (dmg_pos, dmg_arrangements)
     } else {
         (0, 0)
-    }
+    };
+
+    cache.insert(hash, res);
+    res
 }
 
 fn part01(input: &str) -> u64 {
-    let count = input.lines().count();
+    let mut cache = HashMap::new();
     input
         .lines()
-        .enumerate()
-        .map(|(i, line)| {
+        .map(|line| {
             let (registry, records) = line.split_once(|c: char| c.is_ascii_whitespace()).unwrap();
 
-            println!("## {registry} ({i}/{count}) ##");
             let records = records
                 .split(',')
                 .map(|r| r.parse::<usize>().unwrap())
                 .collect::<Vec<_>>();
             let mut registry = registry.chars().map(|c| c.into()).collect::<Vec<_>>();
 
-            let (_, count) = count_arrangements(&mut registry, &records);
+            let (_, count) = count_arrangements(&mut cache, &mut registry, &records);
             count
         })
         .sum()
@@ -219,11 +254,10 @@ mod test {
         assert_eq!(super::part01(INPUT), 21);
     }
 
-    // #[test]
-    // fn part02() {
-    //     assert_eq!(super::part02(INPUT), 525152);
-    // }
-    //
+    #[test]
+    fn part02() {
+        assert_eq!(super::part02(INPUT), 525152);
+    }
 
     #[test]
     fn count_arrangements_simple() {
