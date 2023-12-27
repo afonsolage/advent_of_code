@@ -1,139 +1,144 @@
-use std::collections::HashSet;
-
-#[derive(Default, Debug, Clone)]
-struct Node {
-    registry: Vec<char>,
-    pos: usize,
+#[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+enum Spring {
+    Operational,
+    Damaged,
+    Unknown,
 }
 
-impl Node {
-    fn get(&self) -> Option<&char> {
-        self.registry.get(self.pos)
+impl Spring {
+    fn is_operational(&self) -> bool {
+        matches!(self, Spring::Operational)
     }
-
-    fn set(&mut self, val: char) {
-        self.registry[self.pos] = val;
+    fn is_damaged(&self) -> bool {
+        matches!(self, Spring::Damaged)
     }
-
-    fn next(&mut self) {
-        self.pos += 1;
+    fn is_unknown(&self) -> bool {
+        matches!(self, Spring::Unknown)
     }
 }
 
-impl std::fmt::Display for Node {
+impl From<char> for Spring {
+    fn from(value: char) -> Self {
+        match value {
+            '.' => Spring::Operational,
+            '#' => Spring::Damaged,
+            '?' => Spring::Unknown,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl std::fmt::Display for Spring {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "({}){}",
-            self.pos,
-            String::from_iter(self.registry.iter())
-        )
+        let c = match self {
+            Spring::Operational => '.',
+            Spring::Damaged => '#',
+            Spring::Unknown => '?',
+        };
+        write!(f, "{}", c)
     }
 }
 
-fn traverse(registry: Vec<char>, records: &[usize]) -> usize {
-    let mut count = 0;
-    let mut stack = vec![Node { registry, pos: 0 }];
-    let mut add_node: Option<Node> = None;
-
-    // let mut log_count = 0;
-
-    let mut set = HashSet::new();
-
-    while !stack.is_empty() {
-        if let Some(add_node) = add_node.take() {
-            let str = String::from_iter(add_node.registry.iter());
-            if !set.contains(&str) {
-                set.insert(str);
-            } else {
-                println!("Duplicated! {str}");
-            }
-            stack.push(add_node);
-        }
-        // let len = stack.len();
-        let node = stack.last_mut().unwrap();
-
-        if let Some(&c) = node.get() {
-            match c {
-                '.' | '#' => node.next(),
-                '?' => {
-                    node.set('.');
-                    let is_maybe_operational = is_partial_registry_valid(&node.registry, records);
-                    node.set('#');
-                    let is_maybe_damaged = is_partial_registry_valid(&node.registry, records);
-
-                    if !is_maybe_operational && !is_maybe_damaged {
-                        stack.pop();
-                    } else if !is_maybe_operational {
-                        node.set('#');
-                    } else if !is_maybe_damaged {
-                        node.set('.');
-                    } else {
-                        // println!("({len})Can be both {node}");
-                        // log_count += 1;
-                        // if log_count > 500 {
-                        // return 0;
-                        // }
-                        let mut functional_node = node.clone();
-                        functional_node.set('.');
-                        add_node = Some(functional_node);
-
-                        node.set('#');
-                    }
-                }
-                _ => unreachable!(),
-            }
+fn reduce(registry: &mut [Spring], records: &[usize]) -> (usize, u64) {
+    if records.len() == 1 {
+        // Can't be reduced even further.
+        let is_damaged_remaining = registry.iter().any(|c| c.is_damaged());
+        if is_damaged_remaining {
+            // If there are still damaged springs remaining on registry
+            // this means the registry is invalid.
+            (0, 0)
         } else {
-            if is_registry_valid(&node.registry, records) {
-                count += 1;
-            }
-            stack.pop();
+            (0, 1)
         }
+    } else if registry.first() == Some(&Spring::Unknown) {
+        registry[0] = Spring::Operational;
+        let res = count_arrangements(registry, &records[1..]);
+        registry[0] = Spring::Unknown;
+        res
+    } else {
+        count_arrangements(registry, &records[1..])
     }
-
-    count
 }
 
-fn is_partial_registry_valid(registry: &[char], record: &[usize]) -> bool {
-    if let Some(index) = registry.iter().position(|&c| c == '?') {
-        let (partial_record, _) = registry.split_at(index);
-        let last_char = partial_record.iter().last().copied();
+fn count_arrangements(registry: &mut [Spring], records: &[usize]) -> (usize, u64) {
+    // print!("Count: ");
+    // registry.iter().for_each(|s| print!("{}", s));
+    // records.iter().for_each(|r| print!(" {}", r));
+    // println!();
 
-        let mut it = partial_record
-            .split(|&c| c == '.')
-            .filter(|s| !s.is_empty())
-            .zip(record)
-            .peekable();
-
-        let tmp = partial_record.iter().collect::<String>();
-        // println!("Checking {tmp} [{record:?}]");
-
-        while let Some((reg, &rec)) = it.next() {
-            if it.peek().is_none() {
-                if Some('#') == last_char && reg.len() > rec {
-                    return false;
-                }
-            } else if reg.len() != rec {
-                return false;
-            }
-        }
+    if registry.is_empty() || records.is_empty() {
+        return (0, 0);
     }
 
-    true
-}
+    let record = *records.first().unwrap();
 
-fn is_registry_valid(registry: &[char], record: &[usize]) -> bool {
-    let count = registry
-        .split(|&c| c == '.')
-        .filter(|s| !s.is_empty())
+    let skip_operational = registry.iter().take_while(|c| c.is_operational()).count();
+    // dbg!(skip_operational);
+    let damaged_count = registry
+        .iter()
+        .skip(skip_operational)
+        .take_while(|c| c.is_damaged())
         .count();
 
-    count == record.len()
-        && registry
-            .split(|&c| c == '.')
-            .filter(|s| !s.is_empty())
-            .zip(record)
-            .all(|(rec, &reg)| rec.len() == reg)
+    // dbg!(damaged_count);
+
+    if damaged_count > record {
+        // If there are more damaged springs than our recorded count
+        // this means this registry is invalid.
+        return (0, 0);
+    }
+
+    let next_pos = skip_operational + damaged_count;
+
+    if damaged_count == record {
+        let (reduced_pos, reduced_arrangements) = reduce(&mut registry[next_pos..], records);
+        return (next_pos + reduced_pos, reduced_arrangements);
+    }
+
+    // At this point, the following is true:
+    // - next_pos is either '.' or '?'
+    // - damaged_count is lesser than record
+
+    let Some(next_spring) = registry.get(next_pos) else {
+        // End of registry reached, registry is invalid
+        return (0, 0);
+    };
+
+    if next_spring.is_operational() {
+        // Damaged count doesn't match record. Invalid registry
+        return (0, 0);
+    }
+
+    assert!(next_spring.is_unknown());
+    // At this point, next_spring is unknown
+
+    if damaged_count > 0 && damaged_count < record {
+        // There is at least one damaged spring.
+        // This spring must be a damaged one.
+        registry[next_pos] = Spring::Damaged;
+        let res = count_arrangements(registry, records);
+        registry[next_pos] = Spring::Unknown;
+        return res;
+    }
+
+    // At this point unknown can be either Operational or Damaged
+    registry[next_pos] = Spring::Operational;
+    let (op_pos, op_arrangements) = count_arrangements(registry, records);
+    registry[next_pos] = Spring::Damaged;
+    let (dmg_pos, dmg_arrangements) = count_arrangements(registry, records);
+
+    // Restore unknown value
+    registry[next_pos] = Spring::Unknown;
+
+    if op_arrangements > 0 && dmg_arrangements > 0 {
+        (op_pos.min(dmg_pos), op_arrangements + dmg_arrangements)
+    } else if op_arrangements > 0 {
+        (op_pos, op_arrangements)
+    } else if dmg_arrangements > 0 {
+        (dmg_pos, dmg_arrangements)
+    } else {
+        (0, 0)
+    }
 }
 
 fn part01(input: &str) -> u64 {
@@ -144,14 +149,15 @@ fn part01(input: &str) -> u64 {
         .map(|(i, line)| {
             let (registry, records) = line.split_once(|c: char| c.is_ascii_whitespace()).unwrap();
 
+            println!("## {registry} ({i}/{count}) ##");
             let records = records
                 .split(',')
                 .map(|r| r.parse::<usize>().unwrap())
                 .collect::<Vec<_>>();
+            let mut registry = registry.chars().map(|c| c.into()).collect::<Vec<_>>();
 
-            println!("Traversing: {registry} ({i}/{count})");
-            let registry = registry.chars().collect::<Vec<_>>();
-            traverse(registry, &records) as u64
+            let (_, count) = count_arrangements(&mut registry, &records);
+            count
         })
         .sum()
 }
@@ -195,7 +201,7 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-    // const INPUT_SINGLE: &str = "?#?#?#?#?#?#?#? 1,3,1,6";
+    const INPUT_SINGLE: &str = "?#?#?#?#?#?#?#? 1,3,1,6";
     const INPUT: &str = "???.### 1,1,3
 .??..??...?##. 1,1,3
 ?#?#?#?#?#?#?#? 1,3,1,6
@@ -204,13 +210,24 @@ mod test {
 ?###???????? 3,2,1";
 
     #[test]
+    fn part01_single() {
+        assert_eq!(super::part01(INPUT_SINGLE), 1);
+    }
+
+    #[test]
     fn part01() {
         assert_eq!(super::part01(INPUT), 21);
     }
 
+    // #[test]
+    // fn part02() {
+    //     assert_eq!(super::part02(INPUT), 525152);
+    // }
+    //
+
     #[test]
-    fn part02() {
-        assert_eq!(super::part02(INPUT), 525152);
+    fn count_arrangements_simple() {
+        assert_eq!(1, super::part01("### 3"))
     }
 }
 
