@@ -1,7 +1,7 @@
 fn count_mirroed(line: &[u64]) -> u64 {
     (1..(line.len()))
         .map(|mid| line.split_at(mid))
-        .filter_map(|(left, right)| {
+        .find_map(|(left, right)| {
             let min_len = left.len().min(right.len());
             let last = left.len() - 1;
             if (0..min_len).all(|idx| left[last - idx] == right[idx]) {
@@ -10,7 +10,6 @@ fn count_mirroed(line: &[u64]) -> u64 {
                 None
             }
         })
-        .max()
         .unwrap_or(0)
 }
 
