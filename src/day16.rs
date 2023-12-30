@@ -144,16 +144,51 @@ fn part01(input: &str) -> u64 {
         heat_map[pos.1 as usize][pos.0 as usize] += 1;
     }
 
-    // heat_map.iter().for_each(|line| {
-    //     line.iter().for_each(|cell| print!("{cell} "));
-    //     println!();
-    // });
-
     heat_map.into_iter().flatten().filter(|&c| c > 0).count() as u64
 }
 
-fn part02(_input: &str) -> u64 {
-    0
+fn part02(input: &str) -> u64 {
+    let contraption = Contraption::new(input);
+    let mut max = 0;
+
+    let max_x = contraption.width - 1;
+    let max_y = contraption.height - 1;
+
+    for y in 0..contraption.height {
+        for x in 0..contraption.width {
+            if x == 0 || y == 0 || x == max_x || y == max_y {
+                let mut beam_path = HashSet::new();
+
+                let dir = if x == 0 {
+                    Dir::Right
+                } else if x == max_x {
+                    Dir::Left
+                } else if y == 0 {
+                    Dir::Bottom
+                } else {
+                    Dir::Top
+                };
+
+                let pos = (x as i32, y as i32);
+
+                contraption.fire_beam(pos, dir, &mut beam_path);
+
+                let mut heat_map = vec![vec![0; contraption.width]; contraption.height];
+
+                for pos in beam_path.into_iter().map(|i| i.1) {
+                    heat_map[pos.1 as usize][pos.0 as usize] += 1;
+                }
+
+                let count = heat_map.into_iter().flatten().filter(|&c| c > 0).count() as u64;
+
+                if count > max {
+                    max = count;
+                }
+            }
+        }
+    }
+
+    max
 }
 
 fn main() {
@@ -164,10 +199,7 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-
-    #[test]
-    fn part01() {
-        let input = r#".|...\....
+    const INPUT: &str = r#".|...\....
 |.-.\.....
 .....|-...
 ........|.
@@ -178,14 +210,14 @@ mod test {
 .|....-|.\
 ..//.|...."#;
 
-        assert_eq!(super::part01(input), 46);
+    #[test]
+    fn part01() {
+        assert_eq!(super::part01(INPUT), 46);
     }
 
     #[test]
     fn part02() {
-        let input = "";
-
-        assert_eq!(super::part02(input), 0);
+        assert_eq!(super::part02(INPUT), 51);
     }
 }
 
