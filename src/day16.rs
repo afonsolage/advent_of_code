@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+use std::collections::{HashMap, HashSet};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Dir {
     Top,
     Right,
@@ -107,13 +109,16 @@ impl Contraption {
         }
     }
 
-    fn fire_beam(&self, pos: (i32, i32), dir: Dir, path: &mut Vec<(i32, i32)>) {
-        println!("Firing beam {dir:?} at {pos:?}");
+    fn fire_beam(&self, pos: (i32, i32), dir: Dir, path: &mut HashSet<(Dir, (i32, i32))>) {
         if pos.0 < 0 || pos.1 < 0 || pos.0 as usize >= self.width || pos.1 as usize >= self.height {
             return;
         }
 
-        path.push(pos);
+        if path.contains(&(dir, pos)) {
+            return;
+        } else {
+            path.insert((dir, pos));
+        }
 
         let cell = self.cells[pos.1 as usize][pos.0 as usize];
         let (next_dir, maybe_splitted_next_dir) = cell.bounce(dir);
@@ -130,21 +135,21 @@ impl Contraption {
 
 fn part01(input: &str) -> u64 {
     let contraption = Contraption::new(input);
-    let mut beam_path = vec![];
+    let mut beam_path = HashSet::new();
     contraption.fire_beam((0, 0), Dir::Right, &mut beam_path);
 
     let mut heat_map = vec![vec![0; contraption.width]; contraption.height];
 
-    for pos in beam_path {
+    for pos in beam_path.into_iter().map(|i| i.1) {
         heat_map[pos.1 as usize][pos.0 as usize] += 1;
     }
 
-    heat_map.iter().for_each(|line| {
-        line.iter().for_each(|cell| print!("{cell} "));
-        println!();
-    });
+    // heat_map.iter().for_each(|line| {
+    //     line.iter().for_each(|cell| print!("{cell} "));
+    //     println!();
+    // });
 
-    heat_map.into_iter().flatten().filter(|&c| c == 1).count() as u64
+    heat_map.into_iter().flatten().filter(|&c| c > 0).count() as u64
 }
 
 fn part02(_input: &str) -> u64 {
