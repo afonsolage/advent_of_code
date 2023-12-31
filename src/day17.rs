@@ -1,19 +1,62 @@
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 #[derive(Debug, Clone, Eq)]
 struct Node {
+    path: Vec<(i32, i32)>,
     heat_loss: u32,
     pos: (i32, i32),
-    lru: [Option<Dir>; 3],
+    dir: Dir,
+    consecultive_dir: u32,
 }
 
 impl Node {
-    fn new(pos: (i32, i32)) -> Self {
-        Self {
-            pos,
-            heat_loss: 0,
-            lru: Default::default(),
+    fn get_successors(&self, map: &[Vec<u32>]) -> [Option<Self>; 3] {
+        let width = map[0].len();
+        let height = map.len();
+
+        let mut successors = [None, None, None];
+        let mut idx = 0;
+
+        for dir in Dir::all() {
+            if self.dir == dir && self.consecultive_dir == 3 {
+                continue;
+            }
+
+            if self.dir.inverse() == dir {
+                continue;
+            }
+
+            let next_pos = (self.pos.0 + dir.x(), self.pos.1 + dir.y());
+
+            if next_pos.0 < 0
+                || next_pos.1 < 0
+                || next_pos.0 as usize >= width
+                || next_pos.1 as usize >= height
+            {
+                continue;
+            }
+
+            let next_heat_loss = self.heat_loss + map[next_pos.1 as usize][next_pos.0 as usize];
+            let next_consecultive_dir = if self.dir == dir {
+                self.consecultive_dir + 1
+            } else {
+                1
+            };
+
+            let mut next_path = self.path.clone();
+            next_path.push(next_pos);
+
+            successors[idx] = Some(Node {
+                path: next_path,
+                heat_loss: next_heat_loss,
+                pos: next_pos,
+                dir,
+                consecultive_dir: next_consecultive_dir,
+            });
+            idx += 1;
         }
+
+        successors
     }
 }
 
@@ -46,7 +89,7 @@ enum Dir {
 impl Dir {
     fn x(&self) -> i32 {
         match self {
-            Dir::Right => 1 + 1,
+            Dir::Right => 1,
             Dir::Left => -1,
             _ => 0,
         }
@@ -63,85 +106,56 @@ impl Dir {
     fn all() -> [Dir; 4] {
         [Dir::Top, Dir::Right, Dir::Bottom, Dir::Left]
     }
-}
 
-fn get_neighbors(map: &[Vec<u32>], pos: (i32, i32), lru: [Option<Dir>; 3]) -> [Option<Dir>; 3] {
-    let width = map.first().unwrap().len();
-    let height = map.len();
-
-    let mut neighbors = [None; 3];
-    let mut idx = 0;
-
-    for dir in Dir::all() {
-        let neighbor = (dir.x() + pos.0, dir.y() + pos.1);
-
-        if neighbor.0 < 0
-            || neighbor.1 < 0
-            || neighbor.0 as usize >= width
-            || neighbor.1 as usize >= height
-        {
-            continue;
+    fn inverse(&self) -> Self {
+        match self {
+            Dir::Top => Dir::Bottom,
+            Dir::Right => Dir::Left,
+            Dir::Bottom => Dir::Top,
+            Dir::Left => Dir::Right,
         }
-
-        if let Some(parent_dir) = lru[0] {
-            if parent_dir == dir {
-                continue;
-            }
-        }
-
-        if lru.iter().flatten().all(|&last| last == dir) {
-            continue;
-        }
-
-        neighbors[idx] = Some(dir);
-        idx += 1;
     }
-
-    neighbors
 }
 
 fn dijkstra(map: &[Vec<u32>], start: (i32, i32), end: (i32, i32)) -> u32 {
-    let mut cached_heat_losses = HashMap::new();
     let mut heap = BinaryHeap::new();
+    let mut seen = HashSet::new();
 
-    let width = map.first().unwrap().len();
-    let height = map.len();
+    heap.push(Node {
+        path: vec![start],
+        heat_loss: 0,
+        pos: start,
+        dir: Dir::Right,
+        consecultive_dir: 1,
+    });
 
-    cached_heat_losses.insert((Default::default(), start), 0);
-    heap.push(Node::new(start));
-
-    while let Some(Node {
-        pos,
-        heat_loss,
-        lru,
-    }) = heap.pop()
-    {
-        if pos == end {
-            return heat_loss;
+    while let Some(node) = heap.pop() {
+        if node.pos == end {
+            let path = node.path;
+            // println!("Path: {path:?}");
+            // map.iter().enumerate().for_each(|(y, line)| {
+            //     line.iter().enumerate().for_each(|(x, &c)| {
+            //         if path.contains(&(x as i32, y as i32)) {
+            //             print!("*");
+            //         } else {
+            //             print!("{c}");
+            //         }
+            //     });
+            //
+            //     println!();
+            // });
+            // println!();
+            return node.heat_loss;
         }
 
-        for neighbor_dir in get_neighbors(map, pos, lru).into_iter().flatten() {
-            let neighbor_pos = (pos.0 + neighbor_dir.x(), pos.1 + neighbor_dir.y());
-            let neighbor_heat_loss = map[neighbor_pos.1 as usize][neighbor_pos.0 as usize];
-            let neighbor_lru = [Some(neighbor_dir), lru[0], lru[1]];
-
-            let new_heat_loss = neighbor_heat_loss + heat_loss;
-
-            if let Some(existing_heat_loss) =
-                cached_heat_losses.get_mut(&(neighbor_lru, neighbor_pos))
-            {
-                if new_heat_loss < *existing_heat_loss {
-                    *existing_heat_loss = new_heat_loss;
-                }
+        for successor in node.get_successors(map).into_iter().flatten() {
+            if seen.contains(&(successor.consecultive_dir, successor.dir, successor.pos)) {
+                continue;
             } else {
-                cached_heat_losses.insert((neighbor_lru, neighbor_pos), new_heat_loss);
-            }
+                seen.insert((successor.consecultive_dir, successor.dir, successor.pos));
 
-            heap.push(Node {
-                lru: neighbor_lru,
-                pos: neighbor_pos,
-                heat_loss: new_heat_loss,
-            });
+                heap.push(successor);
+            }
         }
     }
 
@@ -158,7 +172,7 @@ fn part01(input: &str) -> u64 {
         })
         .collect::<Vec<_>>();
 
-    let end_x = map.first().unwrap().len() as i32 - 1;
+    let end_x = map[0].len() as i32 - 1;
     let end_y = map.len() as i32 - 1;
 
     dijkstra(&map, (0, 0), (end_x, end_y)) as u64
