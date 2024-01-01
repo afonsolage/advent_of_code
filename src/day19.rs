@@ -44,6 +44,48 @@ impl Prop {
             Prop::S => part.s,
         }
     }
+
+    fn set_min(&self, part: PartRange, value: u32) -> PartRange {
+        match self {
+            Prop::X => PartRange {
+                x: (value, part.x.1),
+                ..part
+            },
+            Prop::M => PartRange {
+                m: (value, part.m.1),
+                ..part
+            },
+            Prop::A => PartRange {
+                a: (value, part.a.1),
+                ..part
+            },
+            Prop::S => PartRange {
+                s: (value, part.s.1),
+                ..part
+            },
+        }
+    }
+
+    fn set_max(&self, part: PartRange, value: u32) -> PartRange {
+        match self {
+            Prop::X => PartRange {
+                x: (part.x.0, value),
+                ..part
+            },
+            Prop::M => PartRange {
+                m: (part.m.0, value),
+                ..part
+            },
+            Prop::A => PartRange {
+                a: (part.a.0, value),
+                ..part
+            },
+            Prop::S => PartRange {
+                s: (part.s.0, value),
+                ..part
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -71,6 +113,13 @@ impl Op {
             Op::Gt(prop, value) => prop.get(part) > *value,
         }
     }
+
+    fn slice(&self, part: PartRange) -> (PartRange, PartRange) {
+        match self {
+            Op::Lt(prop, value) => (prop.set_max(part, value - 1), prop.set_min(part, *value)),
+            Op::Gt(prop, value) => (prop.set_min(part, value + 1), prop.set_max(part, *value)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +138,32 @@ struct Part {
 impl Part {
     fn sum(&self) -> u32 {
         self.x + self.m + self.a + self.s
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+struct PartRange {
+    x: (u32, u32),
+    m: (u32, u32),
+    a: (u32, u32),
+    s: (u32, u32),
+}
+
+impl PartRange {
+    fn full() -> Self {
+        Self {
+            x: (1, 4000),
+            m: (1, 4000),
+            a: (1, 4000),
+            s: (1, 4000),
+        }
+    }
+
+    fn combinations(&self) -> u64 {
+        ((self.x.1 - self.x.0) as u64 + 1)
+            * ((self.m.1 - self.m.0) as u64 + 1)
+            * ((self.a.1 - self.a.0) as u64 + 1)
+            * ((self.s.1 - self.s.0) as u64 + 1)
     }
 }
 
@@ -119,6 +194,39 @@ fn process(workflows: &HashMap<&str, Workflow>, part: Part) -> bool {
             }
         }
     }
+}
+
+fn count_combinations(
+    starting_name: &str,
+    range: PartRange,
+    workflows: &HashMap<&str, Workflow>,
+) -> u64 {
+    let workflow = workflows.get(starting_name).unwrap();
+
+    let (combinations, _) =
+        workflow
+            .steps
+            .iter()
+            .fold((0, range), |(combinations, range), (maybe_op, action)| {
+                let (left, maybe_right) = if let Some(op) = maybe_op {
+                    let (left, right) = op.slice(range);
+                    (left, Some(right))
+                } else {
+                    (range, None)
+                };
+
+                let left_combinations = match action {
+                    Action::Accept => left.combinations(),
+                    Action::Reject => 0,
+                    Action::Goto(next) => count_combinations(next, left, workflows),
+                };
+
+                let range = maybe_right.unwrap_or(range);
+
+                (combinations + left_combinations, range)
+            });
+
+    combinations
 }
 
 fn part01(input: &str) -> u64 {
@@ -175,8 +283,29 @@ fn part01(input: &str) -> u64 {
         .sum()
 }
 
-fn part02(_input: &str) -> u64 {
-    0
+fn part02(input: &str) -> u64 {
+    let workflows = input
+        .lines()
+        .take_while(|l| !l.is_empty())
+        .map(|line| {
+            let (name, rest) = line.split_once('{').unwrap();
+            let rest = rest.trim_end_matches('}');
+            let steps = rest
+                .split(',')
+                .map(|step| {
+                    if step.contains(':') {
+                        let (op, action) = step.split_once(':').unwrap();
+                        (Some(Op::parse(op)), Action::parse(action))
+                    } else {
+                        (None, Action::parse(step))
+                    }
+                })
+                .collect();
+            (name, Workflow { steps })
+        })
+        .collect::<HashMap<_, _>>();
+
+    count_combinations("in", PartRange::full(), &workflows)
 }
 
 fn main() {
@@ -212,7 +341,7 @@ hdj{m>838:A,pv}
 
     #[test]
     fn part02() {
-        assert_eq!(super::part02(INPUT), 0);
+        assert_eq!(super::part02(INPUT), 167409079868000);
     }
 }
 
