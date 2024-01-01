@@ -1,11 +1,11 @@
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 struct Vec2 {
-    x: i32,
-    y: i32,
+    x: i64,
+    y: i64,
 }
 
 impl Vec2 {
-    fn splat(n: i32) -> Self {
+    fn splat(n: i64) -> Self {
         Self { x: n, y: n }
     }
 
@@ -42,7 +42,7 @@ impl std::ops::Mul for Vec2 {
     }
 }
 
-fn calculate_area(points: &[Vec2]) -> i32 {
+fn calculate_area(points: &[Vec2]) -> i64 {
     points.iter().enumerate().fold(0, |acc, (idx, p)| {
         let next = (idx + 1) % points.len();
         let n = points[next];
@@ -50,7 +50,7 @@ fn calculate_area(points: &[Vec2]) -> i32 {
     }) / 2
 }
 
-fn part01(input: &str) -> u64 {
+fn parse_dig_plan(input: &[(&str, i64)]) -> Vec<Vec2> {
     let corners = [
         Vec2 { x: 1, y: -1 },
         Vec2::splat(1),
@@ -65,20 +65,13 @@ fn part01(input: &str) -> u64 {
         Vec2 { x: 0, y: 1 },
     ];
 
-    let dig_plan = input
-        .lines()
-        .map(|line| {
-            let mut it = line.split(|c: char| c.is_ascii_whitespace());
-            let dir = it.next().unwrap();
-            let meters = it.next().unwrap();
-            let color = it.next().unwrap().trim_matches(|c| c == '(' || c == ')');
-            (dir, meters, color)
-        })
+    input
+        .iter()
         .fold(
             vec![(Vec2::splat(0), Vec2 { x: 0, y: -1 })],
-            |mut points, (dir, meters, _color)| {
+            |mut points, (dir, meters)| {
                 let (previous, _) = *points.last().unwrap();
-                let meters = Vec2::splat(meters.parse().unwrap());
+                let meters = Vec2::splat(*meters);
                 let dir = Vec2::from_dir(dir);
                 let point = previous + dir * meters;
 
@@ -95,13 +88,44 @@ fn part01(input: &str) -> u64 {
             let offset = offsets[corners.iter().position(|&c| c == corner).unwrap()];
             point + offset
         })
+        .collect::<Vec<_>>()
+}
+
+fn part01(input: &str) -> u64 {
+    let dig_plan = input
+        .lines()
+        .map(|line| {
+            let mut it = line.split(|c: char| c.is_ascii_whitespace());
+            let dir = it.next().unwrap();
+            let meters = it.next().unwrap().parse::<i64>().unwrap();
+            (dir, meters)
+        })
         .collect::<Vec<_>>();
+    let dig_plan = parse_dig_plan(&dig_plan);
 
     calculate_area(&dig_plan) as u64
 }
 
-fn part02(_input: &str) -> u64 {
-    0
+fn part02(input: &str) -> u64 {
+    const DIRS: [&str; 4] = ["R", "D", "L", "U"];
+    let dig_plan = input
+        .lines()
+        .map(|line| {
+            let begin = line.chars().position(|c| c == '(').unwrap();
+            let end = line.chars().position(|c| c == ')').unwrap();
+
+            let hex = &line[begin + 2..end - 1];
+            let dir = line[end - 1..end].parse::<usize>().unwrap();
+
+            let dir = DIRS[dir];
+            let meters = i64::from_str_radix(hex, 16).unwrap();
+
+            (dir, meters)
+        })
+        .collect::<Vec<_>>();
+    let dig_plan = parse_dig_plan(&dig_plan);
+
+    calculate_area(&dig_plan) as u64
 }
 
 fn main() {
@@ -134,9 +158,7 @@ U 2 (#7a21e3)";
 
     #[test]
     fn part02() {
-        let input = "";
-
-        assert_eq!(super::part02(input), 0);
+        assert_eq!(super::part02(INPUT), 952408144115);
     }
 }
 
