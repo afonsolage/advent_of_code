@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[lints.rust]
-unused = "allow"
 
 [dependencies]
 glam = "0.25"
@@ -77,3 +75,7 @@ path = "src/day16.rs"
 [[bin]]
 name = "day17"
 path = "src/day17.rs"
+
+[[bin]]
+name = "day18"
+path = "src/day18.rs"
