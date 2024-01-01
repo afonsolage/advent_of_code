@@ -217,8 +217,80 @@ fn part01(input: &str) -> u64 {
     low * high
 }
 
-fn part02(_input: &str) -> u64 {
-    0
+fn predict_rx_push_button_count(modules: &mut HashMap<String, Module>) -> Vec<u64> {
+    let parent = modules
+        .values()
+        .find(|m| m.destinations.first().is_some_and(|d| d == "rx"))
+        .unwrap();
+
+    assert!(matches!(parent.tp, ModuleType::Conjunction));
+
+    let mut targets = modules
+        .values()
+        .filter_map(|m| {
+            if m.destinations.contains(&parent.name) {
+                Some((m.name.clone(), 0u64))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut btn_press_cnt = 0;
+
+    loop {
+        btn_press_cnt += 1;
+        let mut queue = VecDeque::new();
+        queue.push_back(("button".to_string(), Pulse::Low, "broadcaster".to_string()));
+
+        while let Some((sender, pulse, target)) = queue.pop_front() {
+            if pulse.is_high() {
+                if let Some(target_cnt) =
+                    targets
+                        .iter_mut()
+                        .find_map(|(m, cnt)| if m == &sender { Some(cnt) } else { None })
+                {
+                    if *target_cnt == 0 {
+                        *target_cnt = btn_press_cnt;
+
+                        if targets.iter().all(|(_, cnt)| cnt > &0) {
+                            return targets.into_iter().map(|(_, cnt)| cnt).collect();
+                        }
+                    }
+                }
+            }
+
+            let Some(module) = modules.get_mut(&target) else {
+                continue;
+            };
+
+            if let Some(pulse) = module.receive(&sender, pulse) {
+                for dest in &module.destinations {
+                    queue.push_back((target.clone(), pulse, dest.clone()));
+                }
+            }
+        }
+    }
+}
+
+fn gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let tmp = a;
+        a = b;
+        b = tmp % b;
+    }
+    a
+}
+
+fn lcm(a: u64, b: u64) -> u64 {
+    a * b / gcd(a, b)
+}
+
+fn part02(input: &str) -> u64 {
+    let mut modules = parse_modules(input);
+    predict_rx_push_button_count(&mut modules)
+        .into_iter()
+        .fold(1, lcm)
 }
 
 fn main() {
@@ -250,13 +322,6 @@ mod test {
 &con -> output";
 
         assert_eq!(super::part01(input), 11687500);
-    }
-
-    #[test]
-    fn part02() {
-        let input = "";
-
-        assert_eq!(super::part02(input), 0);
     }
 }
 
