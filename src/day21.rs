@@ -65,22 +65,73 @@ fn part01(input: &str, steps: u32) -> u64 {
     walk_to_plots(&map, start, steps)
 }
 
-fn part02(_input: &str) -> u64 {
-    0
+fn part02(input: &str, goal: usize) -> usize {
+    let mut start = (0, 0);
+    let map = input
+        .lines()
+        .enumerate()
+        .map(|(y, line)| {
+            line.chars()
+                .enumerate()
+                .map(|(x, c)| {
+                    if c == 'S' {
+                        start = (x as isize, y as isize);
+                        '.'
+                    } else {
+                        c
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    let width = map[0].len();
+
+    let mut results = vec![];
+    let mut set = HashSet::new();
+    set.insert(start);
+
+    for count in 1.. {
+        let mut next_set = HashSet::new();
+
+        for pos in set {
+            for dir in DIRS {
+                let x = (pos.0 + dir.0 as isize).rem_euclid(width as isize);
+                let y = (pos.1 + dir.1 as isize).rem_euclid(width as isize);
+                let next_pos = (x, y);
+
+                if map[next_pos.1 as usize][next_pos.0 as usize] == '.' {
+                    next_set.insert((pos.0 + dir.0 as isize, pos.1 + dir.1 as isize));
+                }
+            }
+        }
+
+        set = next_set;
+
+        if count % width == width / 2 {
+            println!("{}", set.len());
+            results.push(set.len());
+
+            if let &[y0, y1, y2] = &results[..] {
+                let x = goal / width;
+                let res = (x * x * (y0 + y2 - 2 * y1) + x * (4 * y1 - 3 * y0 - y2) + 2 * y0) / 2;
+                return res;
+            }
+        }
+    }
+
+    unreachable!()
 }
 
 fn main() {
     let input = include_str!("../input/day21.input");
     println!("Part 01: {}", part01(input, 64));
-    println!("Part 02: {}", part02(input));
+    println!("Part 02: {}", part02(input, 26_501_365));
 }
 
 #[cfg(test)]
 mod test {
-
-    #[test]
-    fn part01() {
-        let input = "...........
+    const INPUT: &str = "...........
 .....###.#.
 .###.##..#.
 ..#.#...#..
@@ -91,15 +142,9 @@ mod test {
 .##.#.####.
 .##..##.##.
 ...........";
-
-        assert_eq!(super::part01(input, 6), 16);
-    }
-
     #[test]
-    fn part02() {
-        let input = "";
-
-        assert_eq!(super::part02(input), 0);
+    fn part01() {
+        assert_eq!(super::part01(INPUT, 6), 16);
     }
 }
 
