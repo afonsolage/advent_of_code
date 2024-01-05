@@ -36,12 +36,19 @@ impl Brick {
     }
 
     fn intersects(&self, brick: Brick) -> bool {
+        assert_ne!(self.id, brick.id);
         self.begin.x <= brick.end.x
             && self.end.x >= brick.begin.x
             && self.begin.y <= brick.end.y
             && self.end.y >= brick.begin.y
             && self.begin.z <= brick.end.z
             && self.end.z >= brick.begin.z
+    }
+
+    fn move_up(mut self) -> Self {
+        self.begin.z += 1;
+        self.end.z += 1;
+        self
     }
 }
 
@@ -63,19 +70,44 @@ fn can_move_down(bricks: &[Brick], brick: Brick) -> bool {
 fn settle_down(bricks: &mut [Brick]) {
     for i in 0..bricks.len() {
         let mut brick = bricks[i];
-        println!("Working on brick {brick:?}");
 
         if brick.end.z == 1 {
             continue;
         }
 
         while can_move_down(bricks, brick) {
-            let after = brick.move_down();
-            println!("Moving {brick} to {after}");
             brick = brick.move_down();
         }
         bricks[i] = brick;
     }
+}
+
+fn get_upper_bricks(bricks: &[Brick], brick: Brick) -> Vec<Brick> {
+    let brick = brick.move_up();
+    bricks
+        .iter()
+        .filter(|b| b.id != brick.id)
+        .filter(|b| b.intersects(brick))
+        .copied()
+        .collect()
+}
+
+fn can_remove(bricks: &[Brick], brick: Brick) -> bool {
+    let upper_bricks = get_upper_bricks(bricks, brick);
+    upper_bricks.into_iter().all(|b| {
+        let count = count_intersections(bricks, b.move_down());
+        count > 1
+    })
+}
+
+fn count_intersections(bricks: &[Brick], brick: Brick) -> usize {
+    let intersections = bricks
+        .iter()
+        .filter(|b| b.id != brick.id)
+        .filter(|b| b.intersects(brick))
+        .collect::<Vec<_>>();
+
+    intersections.len()
 }
 
 fn print_y_z(bricks: &[Brick]) {
@@ -152,7 +184,7 @@ fn print_bricks(bricks: &[Brick]) {
     print_y_z(bricks);
 }
 
-fn part01(input: &str) -> u64 {
+fn parse_bricks(input: &str) -> Vec<Brick> {
     let mut next_id = 0;
     let mut bricks = input
         .lines()
@@ -172,13 +204,23 @@ fn part01(input: &str) -> u64 {
 
     bricks.sort_unstable_by(|a, b| a.begin.z.cmp(&b.begin.z));
 
+    bricks
+}
+
+fn part01(input: &str) -> u64 {
+    let mut bricks = parse_bricks(input);
+
     print_bricks(&bricks);
 
     settle_down(&mut bricks);
 
     print_bricks(&bricks);
 
-    0
+    bricks
+        .iter()
+        .copied()
+        .filter(|&b| can_remove(&bricks, b))
+        .count() as u64
 }
 
 fn part02(_input: &str) -> u64 {
@@ -193,58 +235,7 @@ fn main() {
 
 #[cfg(test)]
 mod test {
-    // Tests if two bricks (BoundingBoxes) intersects each other
-    // Two bricks intersects if they AABB represented by begin and end, intersects
-    #[test]
-    fn brick_intersects() {
-        let brick = super::Brick {
-            id: 0,
-            begin: super::Vec3 { x: 0, y: 0, z: 0 },
-            end: super::Vec3 { x: 1, y: 1, z: 1 },
-        };
-
-        assert!(brick.intersects(brick));
-
-        assert!(brick.intersects(super::Brick {
-            id: 1,
-            begin: super::Vec3 { x: 0, y: 0, z: 0 },
-            end: super::Vec3 { x: 1, y: 1, z: 1 },
-        }));
-
-        assert!(brick.intersects(super::Brick {
-            id: 2,
-            begin: super::Vec3 { x: 0, y: 0, z: 0 },
-            end: super::Vec3 { x: 1, y: 1, z: 2 },
-        }));
-
-        assert!(brick.intersects(super::Brick {
-            id: 3,
-            begin: super::Vec3 { x: 0, y: 0, z: 0 },
-            end: super::Vec3 { x: 1, y: 2, z: 1 },
-        }));
-
-        assert!(brick.intersects(super::Brick {
-            id: 4,
-            begin: super::Vec3 { x: 0, y: 0, z: 0 },
-            end: super::Vec3 { x: 2, y: 1, z: 1 },
-        }));
-
-        assert!(brick.intersects(super::Brick {
-            id: 5,
-            begin: super::Vec3 { x: 0, y: 0, z: 0 },
-            end: super::Vec3 { x: 2, y: 2, z: 2 },
-        }));
-
-        assert!(brick.intersects(super::Brick {
-            id: 6,
-            begin: super::Vec3 { x: 0, y: 0, z: 1 },
-            end: super::Vec3 { x: 1, y: 1, z: 2 },
-        }));
-    }
-
-    #[test]
-    fn part01() {
-        let input = "1,0,1~1,2,1
+    const INPUT: &str = "1,0,1~1,2,1
 0,0,2~2,0,2
 0,2,3~2,2,3
 0,0,4~0,2,4
@@ -252,13 +243,13 @@ mod test {
 0,1,6~2,1,6
 1,1,8~1,1,9";
 
-        assert_eq!(super::part01(input), 5);
+    #[test]
+    fn part01() {
+        assert_eq!(super::part01(INPUT), 5);
     }
 
     #[test]
     fn part02() {
-        let input = "";
-
-        assert_eq!(super::part02(input), 0);
+        assert_eq!(super::part02(INPUT), 7);
     }
 }
