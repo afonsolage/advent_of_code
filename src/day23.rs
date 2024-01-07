@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 const DIRS: [(isize, isize); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
 
@@ -27,9 +27,9 @@ fn longest_path(
     map: &[Vec<char>],
     begin: (isize, isize),
     end: (isize, isize),
-    cache: &mut HashMap<(isize, isize), Vec<(isize, isize)>>,
     walked: &mut HashSet<(isize, isize)>,
-) -> Vec<(isize, isize)> {
+) -> Option<Vec<(isize, isize)>> {
+    let mut res = None;
     let mut steps = vec![];
 
     let width = map[0].len() as isize;
@@ -37,13 +37,14 @@ fn longest_path(
 
     let mut next_steps = vec![begin];
 
-    while next_steps.len() == 1 {
+    loop {
         let step = next_steps.pop().unwrap();
 
         steps.push(step);
         walked.insert(step);
 
         if step == end {
+            res = Some(steps);
             break;
         }
 
@@ -65,36 +66,26 @@ fn longest_path(
 
             next_steps.push(next_step);
         }
-    }
 
-    if !next_steps.is_empty() {
-        assert_eq!(next_steps.len(), 2);
-
-        let (begin_a, begin_b) = (next_steps.pop().unwrap(), next_steps.pop().unwrap());
-
-        let path_a = if let Some(cached) = cache.get(&begin_a) {
-            cached.clone()
-        } else {
-            longest_path(map, begin_a, end, cache, &mut walked.clone())
-        };
-
-        let path_b = if let Some(cached) = cache.get(&begin_b) {
-            cached.clone()
-        } else {
-            longest_path(map, begin_b, end, cache, walked)
-        };
-
-        if path_a.len() > path_b.len() {
-            steps.extend_from_slice(&path_a);
-        } else {
-            steps.extend_from_slice(&path_b);
+        if next_steps.len() == 1 {
+            continue;
         }
+
+        if next_steps.len() > 1 {
+            let possible_paths = next_steps
+                .drain(..)
+                .filter_map(|next_begin| longest_path(map, next_begin, end, &mut walked.clone()))
+                .max_by_key(|path| path.len());
+
+            if let Some(longest) = possible_paths {
+                steps.extend_from_slice(&longest);
+                res = Some(steps);
+            }
+        }
+        break;
     }
 
-    let existing = cache.insert(begin, steps.clone());
-    assert!(existing.is_none());
-
-    steps
+    res
 }
 
 fn part01(input: &str) -> usize {
@@ -109,13 +100,30 @@ fn part01(input: &str) -> usize {
     let begin = (1, 0);
     let end = (width - 2, height - 1);
 
-    let path = longest_path(&map, begin, end, &mut HashMap::new(), &mut HashSet::new());
+    let path = longest_path(&map, begin, end, &mut HashSet::new()).unwrap_or_default();
 
     path.len() - 1
 }
 
-fn part02(_input: &str) -> usize {
-    0
+fn part02(input: &str) -> usize {
+    let map = input
+        .lines()
+        .map(|line| {
+            line.chars()
+                .map(|c| if c.is_slope() { '.' } else { c })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    let width = map[0].len() as isize;
+    let height = map.len() as isize;
+
+    let begin = (1, 0);
+    let end = (width - 2, height - 1);
+
+    let path = longest_path(&map, begin, end, &mut HashSet::new()).unwrap_or_default();
+
+    path.len() - 1
 }
 
 fn main() {
@@ -157,6 +165,6 @@ mod test {
 
     #[test]
     fn part02() {
-        assert_eq!(super::part02(INPUT), 0);
+        assert_eq!(super::part02(INPUT), 154);
     }
 }
